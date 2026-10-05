@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La historia del Gato</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;font-family:"Trebuchet MS",Arial,sans-serif;color:#51351f;background:linear-gradient(#a9def5,#dcefc5)}
+button{font:inherit;font-weight:bold;cursor:pointer;border:0;border-radius:18px;padding:14px 20px;min-height:54px;background:#fff;color:#51351f;box-shadow:0 5px 0 #bca989}
+button:hover{filter:brightness(1.05)}button:active{transform:translateY(3px);box-shadow:none}
+button:focus-visible{outline:4px solid #6d4ab0;outline-offset:3px}
+.primary{background:#ffd66b;box-shadow:0 5px 0 #c89e3c}.secondary{background:#eadfff;box-shadow:0 5px 0 #b9a5d8}
+main{width:min(940px,94%);margin:20px auto 35px;padding:clamp(18px,4vw,32px);background:#fffdf4ed;border-radius:30px;box-shadow:0 12px 35px #51351f22;text-align:center}
+h1{font-size:clamp(2rem,6vw,3.2rem);margin:18px 0;color:#995923}h2{font-size:clamp(1.35rem,4vw,2rem)}p{font-size:1.08rem;line-height:1.5}
+.forest{background:linear-gradient(#91d2f2 0 48%,#86b45e 48%);border-radius:24px;padding:25px 12px;min-height:270px;position:relative;overflow:hidden}
+.trees{font-size:clamp(3rem,10vw,6rem);letter-spacing:8px}.mill{font-size:6rem;margin-top:5px}
+.welcome{font-size:clamp(2.2rem,7vw,3.8rem);margin:12px 0}
+.actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin:18px 0}
+.progress{display:flex;gap:10px;justify-content:center;margin:8px 0 18px}.step{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#e5ebdf;font-weight:bold}.step.current{background:#ffd66b}.step.done{background:#9bddaf}
+.board{display:grid;grid-template-columns:repeat(7,1fr);width:min(560px,100%);margin:18px auto;padding:10px;gap:3px;border-radius:20px;background:#5b7d46}
+.cell{aspect-ratio:1;display:grid;place-items:center;border-radius:9px;background:#78a34f;font-size:clamp(1rem,4.5vw,2rem);position:relative}
+.cell.path{background:#f5dda2}.cell.visited{background:#ffd36a}.cell.invalid{background:#ffaaaa}
+.sequence{min-height:65px;padding:13px;background:#f1ecff;border:2px dashed #b9a5d8;border-radius:18px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;justify-content:center}
+.chip{display:inline-grid;place-items:center;min-width:42px;min-height:42px;border-radius:10px;background:white;font-size:1.5rem}
+.feedback{min-height:58px;padding:13px;border-radius:16px;margin-top:15px;font-weight:bold;font-size:1.08rem}.feedback.good{background:#d0f3d9;color:#17582b}.feedback.bad{background:#ffe0e0;color:#8a2525}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.scene{position:relative;padding:18px 14px;background:#f0f8e9;border:3px solid transparent;min-height:180px}.scene.selected{border-color:#7954bd;background:#ece3ff}.scene .picture{display:block;font-size:2.7rem;margin-bottom:10px}.scene .number{position:absolute;top:7px;right:7px;border-radius:50%;width:30px;height:30px;display:grid;place-items:center;color:white;background:#7954bd}
+.maze{display:grid;grid-template-columns:repeat(7,1fr);width:min(490px,100%);margin:18px auto;gap:4px;padding:8px;background:#557748;border-radius:18px}.mcell{aspect-ratio:1;border-radius:7px;display:grid;place-items:center;font-size:clamp(1rem,4vw,1.8rem);background:#b9d890}.mcell.wall{background:#4e713f}.mcell.cat{background:#ffd36a}.mcell.exit{background:#ffe6a1}
+.final{font-size:5rem;margin:12px}.small{font-size:.95rem}
+@media(max-width:520px){.cards{grid-template-columns:1fr}.forest{min-height:220px}}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+"use strict";
+
+const app=document.getElementById("app");
+const arrows={U:"↑",L:"←",R:"→",D:"↓"};
+const moves={U:[-1,0],L:[0,-1],R:[0,1],D:[1,0]};
+
+const route1=["R","R","D","D","R","U","U","R","D","D","R","R","U","U"];
+const path1=[[4,0],[4,1],[4,2],[5,2],[6,2],[6,3],[6,4],[5,4],[4,4],[4,5],[4,6],[3,6],[2,6],[2,5],[2,4]];
+
+const scenes=[
+ {id:1,text:"El gato corre adelante y amenaza a los campesinos...",picture:"🐱🌾"},
+ {id:2,text:"El joven molinero recibe un gato como herencia...",picture:"👦🐱"},
+ {id:3,text:"El astuto gato engaña al ogro...",picture:"🐱🧙‍♂️"},
+ {id:4,text:"El gato esconde la ropa de su amo en el río.",picture:"🐱👕🌊"}
+];
+// Según las consignas: 2 → 1 → 4 → 3
+const correctOrder=[2,1,4,3];
+
+const maze=[
+["#","#","#","#","#","#","#"],
+["#",".",".",".","#",".","#"],
+["#",".","#",".","#",".","#"],
+["#",".","#",".",".",".","#"],
+["#",".","#","#","#",".","#"],
+["#",".",".",".",".",".","#"],
+["#","#","#","#","#","E","#"]
+];
+const mazeStart=[1,1], mazeGoal=[6,5];
+const route3=["R","R","D","D","R","R","D","D","L","L","L","L"];
+
+let state={
+ screen:0,
+ sequences:{1:[],3:[]},
+ order:[],
+ solved:{1:false,2:false,3:false},
+ pos3:[...mazeStart]
+};
+
+function freshState(){
+ state={screen:0,sequences:{1:[],3:[]},order:[],solved:{1:false,2:false,3:false},pos3:[...mazeStart]};
+ render();
+}
+function showFeedback(msg,good){
+ const box=document.getElementById("feedback");
+ if(!box)return;
+ box.className="feedback "+(good?"good":"bad");
+ box.textContent=(good?"✓ ":"✗ ")+msg;
+}
+function progress(){
+ return '<div class="progress">'+[1,2,3].map(n=>`<span class="step ${state.solved[n]?"done":state.screen===n?"current":""}">${state.solved[n]?"✓":n}</span>`).join("")+'</div>';
+}
+function feedback(){
+ return '<div id="feedback" class="feedback"></div><div id="next"></div>';
+}
+
+function render(){
+ if(state.screen===0){
+  app.innerHTML=`
+   <div class="forest">
+    <div class="trees" aria-hidden="true">🌳🌲🌳</div>
+    <div class="mill" aria-hidden="true">🏚️</div>
+    <h1 class="welcome">¡BIENVENIDOS!</h1>
+    <p>🐱 <b>La historia del Gato</b> 👢</p>
+    <p>Una aventura inspirada en <b>El Gato con Botas</b>, de Charles Perrault.</p>
+    <p>Ayudá al Gato a recorrer el camino, ordenar el cuento y salir del bosque.</p>
+    <button class="primary" data-action="play">JUGAR</button>
+   </div>`;
+  return;
+ }
+ if(state.screen===4){
+  app.innerHTML=`
+   <div class="forest">
+    <div class="final">🏆🐱👢</div>
+    <h2>¡MISIÓN CUMPLIDA!</h2>
+    <p>Ayudaste al Gato con Botas a encontrar el camino.</p>
+    <button class="primary" data-action="new">JUGAR DE NUEVO</button>
+   </div>`;
+  return;
+ }
+ if(state.screen===2){renderStory();return;}
+ if(state.screen===1){renderPath1();return;}
+ renderMaze();
+}
+
+function renderPath1(){
+ app.innerHTML=`
+ ${progress()}
+ <h2>🗺️ DESAFÍO 1 – EL CAMINO</h2>
+ <p>Ayudá al Gato con Botas a llegar hasta el castillo siguiendo <b>el único camino formado por puntos</b>.</p>
+ <p class="small">Elegí las flechas para recorrer el sendero.</p>
+ <div id="board" class="board"></div>
+ <div class="actions">
+  <button data-move="U">↑ Avanzar</button>
+  <button data-move="L">← Izquierda</button>
+  <button data-move="R">→ Derecha</button>
+  <button data-move="D">↓ Abajo</button>
+ </div>
+ <p><strong>Tu secuencia:</strong></p>
+ <div id="sequence" class="sequence">Elegí las flechas.</div>
+ <div class="actions">
+  <button class="secondary" data-action="erase">BORRAR</button>
+  <button class="primary" data-action="check">COMPROBAR</button>
+  <button data-action="reset">REINICIAR</button>
+ </div>
+ ${feedback()}`;
+ drawPathBoard();
+ drawSequence(1);
+}
+
+function drawPathBoard(result){
+ const board=document.getElementById("board"); if(!board)return;
+ const pos=result?result.position:path1[0];
+ const visited=result?result.visited:[];
+ let out="";
+ for(let r=0;r<7;r++)for(let c=0;c<7;c++){
+  const p=[r,c];
+  const onPath=path1.some(x=>x[0]===r&&x[1]===c);
+  const visit=visited.some(x=>x[0]===r&&x[1]===c);
+  const bad=result&&result.blocked&&result.blocked[0]===r&&result.blocked[1]===c;
+  let symbol=onPath?"·":"🍃";
+  if(r===path1[0][0]&&c===path1[0][1])symbol="🐱";
+  if(r===path1[path1.length-1][0]&&c===path1[path1.length-1][1])symbol="🏰";
+  if(pos[0]===r&&pos[1]===c)symbol="🐱";
+  out+=`<div class="cell ${onPath?"path":""} ${visit?"visited":""} ${bad?"invalid":""}">${symbol}</div>`;
+ }
+ board.innerHTML=out;
+}
+
+function drawSequence(n){
+ const el=document.getElementById("sequence");if(!el)return;
+ const seq=state.sequences[n];
+ el.innerHTML=seq.length?seq.map((m,i)=>`<span class="chip" title="Paso ${i+1}">${arrows[m]}</span>`).join(""):"Elegí las flechas.";
+}
+
+function evaluatePath(path,sequence){
+ let pos=[...path[0]],visited=[[...pos]];
+ for(const m of sequence){
+  const d=moves[m],target=[pos[0]+d[0],pos[1]+d[1]];
+  if(!path.some(p=>p[0]===target[0]&&p[1]===target[1]))
+   return {correct:false,position:pos,visited,blocked:target};
+  pos=target;visited.push([...pos]);
+ }
+ const goal=path[path.length-1];
+ return {correct:pos[0]===goal[0]&&pos[1]===goal[1],position:pos,visited,blocked:null};
+}
+
+function renderStory(){
+ app.innerHTML=`
+ ${progress()}
+ <h2>📖 DESAFÍO 2 – ORDENAMOS EL CUENTO</h2>
+ <p>Seleccioná las escenas en el orden en que suceden.</p>
+ <p class="small">La primera escena que elijas será la número 1.</p>
+ <div class="cards">
+ ${[3,1,4,2].map(id=>{
+   const s=scenes.find(x=>x.id===id),i=state.order.indexOf(id);
+   return `<button class="scene ${i>=0?"selected":""}" data-scene="${id}">
+    ${i>=0?`<span class="number">${i+1}</span>`:""}
+    <span class="picture">${s.picture}</span>${s.text}
+   </button>`;
+ }).join("")}
+ </div>
+ <p><strong>Tu orden:</strong></p>
+ <div class="sequence">${state.order.length?state.order.map((id,i)=>`<span>${i+1}. ${scenes.find(s=>s.id===id).text}</span>`).join("<br>"):"Elegí la primera escena."}</div>
+ <div class="actions">
+  <button class="secondary" data-action="erase">BORRAR</button>
+  <button class="primary" data-action="check">COMPROBAR</button>
+  <button data-action="reset">REINICIAR</button>
+ </div>
+ ${feedback()}`;
+}
+
+function renderMaze(){
+ const boardCells=[];
+ for(let r=0;r<7;r++)for(let c=0;c<7;c++){
+  let cls="mcell",sym="🌿";
+  if(maze[r][c]==="#"){cls+=" wall";sym="🌲";}
+  else if(r===state.pos3[0]&&c===state.pos3[1]){cls+=" cat";sym="🐱";}
+  else if(maze[r][c]==="E"){cls+=" exit";sym="🏁";}
+  boardCells.push(`<div class="${cls}">${sym}</div>`);
+ }
+ app.innerHTML=`
+ ${progress()}
+ <h2>🌲 DESAFÍO 3 – ELEGÍ EL CAMINO</h2>
+ <p>Construí una secuencia de flechas que lleve al Gato hasta la salida del bosque.</p>
+ <div class="maze">${boardCells.join("")}</div>
+ <div class="actions">
+  <button data-move="U">↑ Arriba</button>
+  <button data-move="L">← Izquierda</button>
+  <button data-move="R">→ Derecha</button>
+  <button data-move="D">↓ Abajo</button>
+ </div>
+ <p><strong>Tu secuencia:</strong></p>
+ <div id="sequence" class="sequence">Elegí las flechas.</div>
+ <div class="actions">
+  <button class="secondary" data-action="erase">BORRAR</button>
+  <button class="primary" data-action="check">COMPROBAR</button>
+  <button data-action="reset">VOLVER A INTENTAR</button>
+ </div>
+ ${feedback()}`;
+ drawSequence(3);
+}
+
+function checkCurrent(){
+ const n=state.screen;
+ let correct=false;
+ if(n===2){
+  correct=state.order.length===4&&state.order.every((id,i)=>id===correctOrder[i]);
+  showFeedback(correct?"¡Excelente! Ordenaste la historia.":"¡Intentá nuevamente!",correct);
+ }else if(n===1){
+  const res=evaluatePath(path1,state.sequences[1]);
+  correct=res.correct;
+  drawPathBoard(res);
+  showFeedback(correct?"¡Muy bien! Lograste encontrar el camino.":"¡Intentá nuevamente! Seguí el camino formado por los puntos.",correct);
+ }else{
+  const res=evaluatePath([[1,1],[1,2],[1,3],[2,3],[3,3],[3,4],[3,5],[4,5],[5,5],[6,5]],state.sequences[3]);
+  correct=res.correct;
+  showFeedback(correct?"¡Muy bien! Encontraste la salida del bosque.":"¡Cuidado! Ese camino no es correcto. Volvé a intentarlo.",correct);
+ }
+ state.solved[n]=correct;
+ document.getElementById("next").innerHTML=correct?`<div class="actions"><button class="primary" data-action="next">${n===3?"FINALIZAR":"SIGUIENTE DESAFÍO"}</button></div>`:"";
+}
+
+app.addEventListener("click",e=>{
+ const b=e.target.closest("button");if(!b)return;
+ const action=b.dataset.action;
+
+ if(action==="play"){state.screen=1;render();return;}
+ if(action==="new"){freshState();return;}
+ if(action==="next"&&state.solved[state.screen]){state.screen++;render();return;}
+
+ if(b.dataset.move){
+  const n=state.screen,seq=state.sequences[n];
+  if(seq.length<30)seq.push(b.dataset.move);
+  drawSequence(n);
+  return;
+ }
+
+ if(b.dataset.scene){
+  const id=Number(b.dataset.scene),i=state.order.indexOf(id);
+  if(i>=0)state.order.splice(i,1);else if(state.order.length<4)state.order.push(id);
+  state.solved[2]=false;renderStory();return;
+ }
+
+ if(action==="erase"||action==="reset"){
+  if(state.screen===2){if(action==="reset")state.order=[];else state.order.pop();}
+  else {if(action==="reset")state.sequences[state.screen]=[];else state.sequences[state.screen].pop();}
+  state.solved[state.screen]=false;render();return;
+ }
+ if(action==="check")checkCurrent();
+});
+
+render();
+</script>
+</body>
+</html>
